@@ -1,0 +1,26 @@
+---
+- set_fact:
+    custom_resources:
+    - TsscPlatform
+
+- name: Create CR
+  k8s:
+    state: present
+    namespace: '{{ namespace }}'
+    definition: "{{ lookup('template', '/'.join([samples_dir, cr_file])) | from_yaml }}"
+  vars:
+    cr_file: 'redhatgov_v1alpha1_{{ item | lower }}_molecule.yaml'
+  loop: '{{ custom_resources }}'
+
+# Ensure regular Ansible output to avoid Travis build timeouts
+- name: Wait for CR to be Reconciled
+  k8s_info:
+    api_version: v1alpha1
+    kind: '{{ item }}'
+    namespace: '{{ namespace }}'
+    name: '{{ item | lower}}-testing'
+  register: result
+  until: result.resources[0].status | json_query("conditions[?(@.reason=='Successful')]")
+  retries: 30
+  delay: 60
+  loop: '{{ custom_resources }}'
